@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ALGENERAL - لوحة التحكم</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --main-red: #E10600;
+            --glow-red: rgba(225, 6, 0, 0.6);
+            --bg-dark: #0a0a0a;
+            --card-bg: #151515;
+        }
+        * { box-sizing: border-box; font-family: 'Cairo', sans-serif; }
+        body { 
+            background: radial-gradient(circle at top, #1a0505, var(--bg-dark)); 
+            color: white; padding: 20px; margin: 0; min-height: 100vh;
+        }
+        h1 { 
+            color: white; text-align: center; text-shadow: 0 0 15px var(--glow-red); 
+            font-weight: 900; letter-spacing: 2px; margin-bottom: 5px;
+        }
+        .subtitle { text-align: center; color: #888; font-size: 14px; margin-bottom: 25px; }
+        
+        .card { 
+            background: var(--card-bg); padding: 20px; border-radius: 15px; 
+            border: 1px solid #333; max-width: 500px; margin: 0 auto 20px auto;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8); position: relative; overflow: hidden;
+        }
+        .card::before {
+            content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 3px;
+            background: linear-gradient(90deg, transparent, var(--main-red), transparent);
+        }
+
+        .form-group { display: flex; flex-direction: column; gap: 15px; margin-bottom: 15px; }
+        label { font-size: 14px; color: #ccc; margin-bottom: -10px; }
+        input { 
+            width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #444; 
+            background: #222; color: white; font-family: 'Cairo'; outline: none; font-size: 16px;
+        }
+        input:focus { border-color: var(--main-red); box-shadow: 0 0 10px var(--glow-red); }
+        
+        button { 
+            background: linear-gradient(45deg, #b30500, var(--main-red)); 
+            color: white; padding: 12px; border: none; border-radius: 8px; 
+            font-size: 16px; font-weight: bold; cursor: pointer; width: 100%;
+            box-shadow: 0 0 15px var(--glow-red); transition: 0.3s;
+        }
+        button:hover { transform: scale(1.02); box-shadow: 0 0 25px var(--main-red); }
+        
+        .result-box {
+            display: none; margin-top: 15px; background: #000; padding: 15px;
+            border-radius: 8px; border: 1px dashed var(--main-red); text-align: center;
+        }
+        .code-text { font-size: 24px; font-weight: bold; color: #fff; letter-spacing: 1px; text-shadow: 0 0 10px #fff; }
+        .copy-btn { background: #333; margin-top: 10px; font-size: 14px; padding: 8px; box-shadow: none; }
+        .copy-btn:hover { background: #555; box-shadow: none; }
+
+        /* جدول الأكواد */
+        .code-list { margin-top: 20px; }
+        .code-item { 
+            background: #111; padding: 12px; border-radius: 8px; margin-bottom: 10px;
+            display: flex; flex-direction: column; gap: 10px; border-right: 3px solid var(--main-red);
+        }
+        .code-item .info { font-size: 14px; color: #ccc; display: flex; justify-content: space-between; }
+        .code-item .code-txt { font-size: 18px; font-weight: bold; color: #fff; }
+        .actions { display: flex; gap: 5px; flex-wrap: wrap; }
+        .actions button { padding: 6px; font-size: 12px; width: auto; flex: 1; }
+        .btn-stop { background: #444; box-shadow: none; }
+        .btn-stop:hover { background: #666; }
+        .btn-del { background: #800; box-shadow: none; }
+        
+        .status-active { color: #00ff00; font-weight: bold; }
+        .status-banned { color: red; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h1>ALGENERAL</h1>
+    <div class="subtitle">لوحة إدارة الأكواد الفخمة</div>
+    
+    <!-- قسم إنشاء كود -->
+    <div class="card">
+        <h3 style="margin-top:0; color: #E10600;">إنشاء كود جديد</h3>
+        <div class="form-group">
+            <label>المدة (مثال: 30m للدقائق، 1h للساعات، 30d للأيام، أو 30 فقط للأيام):</label>
+            <input type="text" id="duration" placeholder="اكتب المدة هنا..." value="30d">
+            
+            <label>عدد الأجهزة (اكتب 0 للجميع / غير محدود):</label>
+            <input type="number" id="devices" placeholder="عدد الأجهزة" value="1" min="0">
+        </div>
+        <button onclick="createCode()">توليد الكود</button>
+        
+        <div class="result-box" id="resultBox">
+            <div class="code-text" id="generatedCode"></div>
+            <button class="copy-btn" onclick="copyCode()">نسخ الكود 📋</button>
+        </div>
+    </div>
+
+    <!-- قسم إدارة الأكواد -->
+    <div class="card">
+        <h3 style="margin-top:0; color: #E10600;">إدارة الأكواد</h3>
+        <div class="code-list" id="codesList">
+            <p style="text-align:center; color:#666;">جاري تحميل الأكواد...</p>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDocs, collection, updateDoc, query, orderBy, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyB8TFOsvyZHCnIXQFZBFotdhLhFs6WoubQ",
+            authDomain: "algeneral-95210.firebaseapp.com",
+            projectId: "algeneral-95210",
+            storageBucket: "algeneral-95210.firebasestorage.app",
+            messagingSenderId: "666486704683",
+            appId: "1:666486704683:web:d82a78527fa09fb036786e"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // دالة تحويل النص لوقت بالميلي ثانية
+        function parseDuration(inputStr) {
+            const str = inputStr.trim().toLowerCase();
+            const match = str.match(/^(\d+)([mhd])?$/);
+            
+            if (!match) return null; // صيغة غلط
+            
+            const amount = parseInt(match[1]);
+            const unit = match[2] || 'd'; // لو مفيش حرف، افتراضي أيام (d)
+
+            if (unit === 'm') return { ms: amount * 60 * 1000, text: `${amount} دقيقة` };
+            if (unit === 'h') return { ms: amount * 60 * 60 * 1000, text: `${amount} ساعة` };
+            return { ms: amount * 24 * 60 * 60 * 1000, text: `${amount} يوم` };
+        }
+
+        window.createCode = async function() {
+            const durationInput = document.getElementById("duration").value;
+            const devices = parseInt(document.getElementById("devices").value);
+            
+            const durationData = parseDuration(durationInput);
+            if (!durationData) {
+                alert("صيغة المدة غير صحيحة! اكتب مثلاً 30m أو 1h أو 30d");
+                return;
+            }
+
+            const now = new Date();
+            const expiresAt = new Date(now.getTime() + durationData.ms);
+            
+            const part1 = Math.random().toString(36).substring(2, 6).toUpperCase();
+            const part2 = Math.random().toString(36).substring(2, 6).toUpperCase();
+            const code = `ALGENERAL-${part1}-${part2}`;
+            
+            try {
+                await setDoc(doc(db, "codes", code), {
+                    code: code,
+                    durationText: durationData.text, // للنص اللي هيظهر في الموقع
+                    expiresAt: expiresAt.toISOString(), // وقت الانتهاء الفعلي
+                    maxDevices: devices,
+                    usedDevices: [],
+                    status: "active",
+                    createdAt: new Date()
+                });
+                
+                document.getElementById("generatedCode").innerText = code;
+                document.getElementById("resultBox").style.display = "block";
+                loadCodes();
+            } catch (e) {
+                alert("خطأ: " + e.message);
+            }
+        };
+
+        window.copyCode = function() {
+            const code = document.getElementById("generatedCode").innerText;
+            navigator.clipboard.writeText(code).then(() => {
+                alert("تم نسخ الكود بنجاح!");
+            });
+        };
+
+        async function loadCodes() {
+            const listDiv = document.getElementById("codesList");
+            listDiv.innerHTML = "<p style='text-align:center; color:#666;'>جاري التحميل...</p>";
+            
+            try {
+                const q = query(collection(db, "codes"), orderBy("createdAt", "desc"));
+                const querySnapshot = await getDocs(q);
+                
+                if (querySnapshot.empty) {
+                    listDiv.innerHTML = "<p style='text-align:center; color:#666;'>لا توجد أكواد.</p>";
+                    return;
+                }
+
+                listDiv.innerHTML = "";
+                querySnapshot.forEach((docSnap) => {
+                    const data = docSnap.data();
+                    const isBanned = data.status !== "active";
+                    const deviceText = data.maxDevices === 0 ? "للجميع" : `${data.usedDevices.length}/${data.maxDevices} أجهزة`;
+                    
+                    const div = document.createElement("div");
+                    div.className = "code-item";
+                    div.innerHTML = `
+                        <div class="info">
+                            <span class="code-txt">${data.code}</span>
+                            <span class="${isBanned ? 'status-banned' : 'status-active'}">${isBanned ? 'موقوف' : 'نشط'}</span>
+                        </div>
+                        <div class="info">
+                            <span>المدة: ${data.durationText}</span>
+                            <span>الاستخدام: ${deviceText}</span>
+                        </div>
+                        <div class="actions">
+                            <button onclick="addHours('${data.code}', '${data.expiresAt}', '${data.durationText}', 1)">+ ساعة</button>
+                            <button onclick="addHours('${data.code}', '${data.expiresAt}', '${data.durationText}', -1)">- ساعة</button>
+                            <button class="btn-stop" onclick="toggleStatus('${data.code}', '${data.status}')">
+                                ${isBanned ? 'تفعيل' : 'إيقاف'}
+                            </button>
+                            <button class="btn-del" onclick="deleteCode('${data.code}')">حذف</button>
+                        </div>
+                    `;
+                    listDiv.appendChild(div);
+                });
+            } catch (e) {
+                listDiv.innerHTML = `<p style="color:red; text-align:center;">خطأ: ${e.message}</p>`;
+            }
+        }
+
+        window.toggleStatus = async function(code, currentStatus) {
+            const newStatus = currentStatus === "active" ? "banned" : "active";
+            await updateDoc(doc(db, "codes", code), { status: newStatus });
+            loadCodes();
+        };
+
+        // زيادة أو تقليل ساعة (عشان تناسب الدقايق والساعات)
+        window.addHours = async function(code, currentExpiresAt, currentText, hoursToAdd) {
+            const currentDate = new Date(currentExpiresAt);
+            const newDate = new Date(currentDate.getTime() + (hoursToAdd * 60 * 60 * 1000));
+            
+            // تحديث النص بناءً على الوقت الجديد
+            let newText = currentText;
+            if (currentText.includes("دقيقة")) newText = "تم التعديل بالساعات";
+            
+            await updateDoc(doc(db, "codes", code), { 
+                expiresAt: newDate.toISOString(),
+                durationText: newText 
+            });
+            loadCodes();
+        };
+
+        window.deleteCode = async function(code) {
+            if(confirm("هل أنت متأكد من حذف هذا الكود نهائياً؟")) {
+                await deleteDoc(doc(db, "codes", code));
+                loadCodes();
+            }
+        };
+
+        loadCodes();
+    </script>
+</body>
+</html>
